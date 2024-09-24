@@ -3,6 +3,23 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+
+const generatedAccessAndRefreshTokens = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+    user.refreshToken = refreshToken
+    await user.save({validateBeforeSave: false})
+
+    return {accessToken, refreshToken}
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating the refresh and access token"
+    );
+  }
+};
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend
   //validation - not empty
@@ -35,8 +52,12 @@ const registerUser = asyncHandler(async (req, res) => {
   // const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
   let coverImageLocalPath;
-  if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
-    coverImageLocalPath = req.files.coverImage[0].path
+  if (
+    req.files &&
+    Array.isArray(req.files.coverImage) &&
+    req.files.coverImage.length > 0
+  ) {
+    coverImageLocalPath = req.files.coverImage[0].path;
   }
 
   if (!avatarLocalPath) {
@@ -72,4 +93,57 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered successfully"));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  // req body -> data
+  // username or email
+  // find the user
+  // passeord check
+  //access and refresh token
+  // send cookie
+
+  const { email, username, password } = req.body;
+
+  if (!username || !email) {
+    throw new ApiError(400, "Username or password is required");
+  }
+
+  const user = await User.findOne({
+    $or: [
+      {
+        username,
+      },
+      {
+        email,
+      },
+    ],
+  });
+  if (!user) {
+    throw new ApiError(404, "User does not exist");
+  }
+
+  const ispPasswordValid = await user.ispPasswordCorrect(password);
+  if (!ispPasswordValid) {
+    throw new ApiError(401, "Invalid user credentials");
+  }
+
+ const {accessToken, refreshToken} = await generatedAccessAndRefreshTokens(user._id)
+ const userLongedIn = await User.findById(user._id).select("-password -refreshToken")
+
+ const options = {
+  httpOnly: true,
+  secure: true
+ }
+
+ return res.status(200).cookie("accessToken", accessToken, options)
+ .cookie("refreshToken", refreshToken, options)
+ .json(
+  new ApiResponse(
+    200,
+    {
+      user: userLongedIn, accessToken, refreshToken
+    },
+    "User logged In Successfully"
+  )
+ )
+});
+export { registerUser, loginUser };
