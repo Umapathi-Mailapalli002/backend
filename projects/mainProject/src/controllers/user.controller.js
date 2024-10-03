@@ -3,17 +3,13 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-
+import jwt from "jsonwebtoken"
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
-    console.log(user);
     const accessToken = user.generateAccessToken();
-    console.log("this is access token",accessToken)
     const refreshToken = user.generateRefreshToken();
-    console.log("this is refresh token",refreshToken);
     user.refreshToken = refreshToken
-    console.log(user.refreshToken)
     await user.save({validateBeforeSave: false})
     return {accessToken, refreshToken}
   } catch (error) {
@@ -35,7 +31,6 @@ const registerUser = asyncHandler(async (req, res) => {
   // return res
 
   const { fullName, email, username, password } = req.body;
-  console.log("email", email);
 
   if (
     [fullName, email, username, password].some((field) => field?.trim() === "")
@@ -105,7 +100,6 @@ const loginUser = asyncHandler(async (req, res) => {
   // send cookie
 
   const { email, username, password } = req.body;
-console.log(email, password);
   if (!username && !email) {
     throw new ApiError(400, "Username or password is required");
   }
@@ -174,6 +168,15 @@ const logoutUser = asyncHandler(async(req, res) => {
    .json(new ApiResponse(200, {}, "User logged Out"))
 })
 
-const refresh
-const incomingRefreshToken = req.cookies.
+const refreshAccessToken = asyncHandler( async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+  if (incomingRefreshToken) {
+    throw new ApiError(401, "unauthorized request")
+  }
+  jwt.verify(
+    incomingRefreshToken,
+    process.env.REFRESH_TOKEN_SECRET
+  )
+})
 export { registerUser, loginUser, logoutUser };
